@@ -1,7 +1,11 @@
 # mac-cleanup-skill — 项目长期约定
 
-## 部署与同步（最容易踩的坑）
-- 开发目录 `/Users/wanghui/Code/mac-cleanup-skill` 与已安装目录 `~/.workbuddy/skills/mac-cleanup`
+## 版本控制
+- 仓库：`git@github.com:v2camp/mac-cleanup-skill.git`（private，分支 main）。
+  2026-10-18 之前本目录**不是 git 仓库**，skill 由 `userImport` 上传安装、无上游可参照。
+- 本机 `gh` 需加 `env -u GITHUB_TOKEN -u GH_TOKEN` 才能用（该环境变量是失效 token，会遮蔽 keyring 凭据）。
+
+## 部署与同步（最容易踩的坑）- 开发目录 `/Users/wanghui/Code/mac-cleanup-skill` 与已安装目录 `~/.workbuddy/skills/mac-cleanup`
   是**两份独立副本**（2026-10-18 实测 inode 不同，非符号链接）。`script-reference.md` 旧文写的
   `~/.agents/skills/mac-cleanup -> ~/Code/mac-cleanup-skill` 符号链接在本机不成立。
 - 后果：改仓库 ≠ 生效。曾出现「引擎 dry-run 删除 bug 已在仓库修复、用户侧仍跑旧版」的静默不一致。
