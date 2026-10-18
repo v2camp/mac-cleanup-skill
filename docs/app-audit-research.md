@@ -168,7 +168,7 @@ Apple 的契约很明确：Caches 目录存「App 运行不必需、但可提升
 
 ---
 
-## 7. 对 mac-cleanup skill 的落地建议
+## 7. 对 mac-cleanup skill 的落地建议（v1.4 已实现）
 
 ### 现状差距
 
@@ -212,7 +212,46 @@ C       shared-group     ~/Library/Group Containers/88L...z      —        skip
 
 ---
 
-## 8. 主要来源
+## 8. 实现记录（v1.4.0，2026-10-18）
+
+已落地三个文件：
+
+| 文件 | 角色 |
+|---|---|
+| `app-orphans.sh` | 发现通道 C：声明减法审计，严格只读；`--emit-rules` / `--verify` 两个出口 |
+| `mac-cleanup.sh` 模块 18 `cleanup_orphan_ids` | 消费 `ORPHAN_ID_RULES`，执行前二次核验，`safe_remove`（废纸篓） |
+| `tests/app-orphans.test.sh` | 18 项断言，纯 fixture，不读取真实 Library |
+
+### 实现过程中被实测推翻的三个设计
+
+1. **静默期不能一刀切。** 初版对所有候选统一 30 天，结果 `com.tencent.WeWorkMac`
+   （1.8 GB，mtime 17 天前）被降级为 C，直接漏掉最大的目标。改为：A 级（有失效注册）
+   用 7 天，B 级（仅目录）保留 30 天。证据强度不同，闸门就该不同。
+
+2. **Group Containers 必须按 TeamID 归因，不能按名字。** 初版把
+   `UBF8T346G9.Office`（132 MB）报成孤儿，而本机装着 Microsoft To Do（同属 UBF8T346G9）。
+   现在的规则：`<10 位 TeamID>.xxx` 若该 TeamID 还有存活 bundle，则无卸载证据的一律 C；
+   即使有证据也标 `stale-shared`，不进入 `--emit-rules`。
+
+3. **`--emit-rules` 不能每次写 `ORPHAN_ID_RULES=()`。** 那是重置而非追加，
+   第二次审计会静默清空前一次的规则。改为只用 `+=`，且按 id 去重。
+
+### 本机实测结果（审计 → 规则 → 引擎）
+
+```
+声明集 401 个 bundle id ／ 候选 2257 条
+A 级 11 项 2,149 MB    B 级 101 项 59.8 MB    C 级 2,033 项
+→ --emit-rules: 2 条（WeCom 1.8 GB + wwmapp 324 MB）
+→ ./mac-cleanup.sh -n: 正确识别、正确走 [dry-run] 分支，未产生任何删除
+```
+
+误报清单（全部落在 C，未进入候选）：`com.apple.*` 系统代理、`*.IPCHelper`、
+`*.widget`、UUID 命名容器、同 TeamID 共享容器。
+
+未覆盖（有意为之）：`~/Library/Application Support` 下的非 id 命名目录（如 `Figma`），
+因为只能靠名字匹配，误伤率过高。这类仍由 `ORPHAN_RULES` 的显式规则处理。
+
+## 9. 主要来源
 
 - Apple：删除/卸载 App 官方说明 — https://support.apple.com/en-ng/102610
 - Apple：缓存目录契约 — https://developer.apple.com/documentation/foundation/using-the-file-system-effectively

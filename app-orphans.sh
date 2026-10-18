@@ -56,8 +56,9 @@ TSV_OUT=""
 USE_LS=true
 
 USER_DATA_DIR="$HOME/.mac-cleanup"
-USER_DATA_FILE="$USER_DATA_DIR/data.txt"
-REPORT_DIR="$USER_DATA_DIR/reports"
+USER_DATA_FILE="${ORPHAN_DATA_FILE:-$USER_DATA_DIR/data.txt}"
+REPORT_DIR="${ORPHAN_REPORT_DIR:-$USER_DATA_DIR/reports}"
+SKIP_APP_SCAN="${ORPHAN_SKIP_APP_SCAN:-0}"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/app-orphans.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
@@ -169,13 +170,15 @@ build_claim() {
   fi
 
   # /Applications 与 ~/Applications 兜底：即使 LaunchServices 库损坏也能拿到在装身份
-  local app id
-  for app in /Applications/*.app "$HOME/Applications"/*.app; do
-    [ -d "$app" ] || continue
-    id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
-          "$app/Contents/Info.plist" 2>/dev/null) || id=""
-    [ -n "$id" ] && printf '%s\n' "$id" >> "$CLAIM"
-  done
+  if [ "$SKIP_APP_SCAN" != "1" ]; then
+    local app id
+    for app in /Applications/*.app "$HOME/Applications"/*.app; do
+      [ -d "$app" ] || continue
+      id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+            "$app/Contents/Info.plist" 2>/dev/null) || id=""
+      [ -n "$id" ] && printf '%s\n' "$id" >> "$CLAIM"
+    done
+  fi
 
   sort -u -o "$CLAIM" "$CLAIM"
 }
@@ -299,7 +302,7 @@ classify() {
         print id, kind, path, mt, "B", "dir-only", ""
       }
     }
-  ' "$CLAIM" "$STALE" "$CAND" > "$CLASSIFIED"
+  ' "$CLAIM" "$STALE" "$TEAMS" "$CAND" > "$CLASSIFIED"
 }
 
 # ── 4. 体积与排序 ────────────────────────────────────────────────────────────
@@ -381,6 +384,7 @@ report() {
     case "$ev" in
       trash)    ev_txt="LaunchServices 记录指向废纸篓" ;;
       stale)    ev_txt="LaunchServices 记录已失效" ;;
+      *-shared) ev_txt="有卸载证据，但属同厂商共享容器，需人工确认" ;;
       dir-only) ev_txt="无卸载证据，仅目录残留" ;;
       *)        ev_txt="$ev" ;;
     esac
@@ -417,7 +421,7 @@ emit_rules() {
   mkdir -p "$USER_DATA_DIR"
   local stage="$TMP/emit.txt"
   awk -F'\t' -v home="$HOME" -v min="$MIN_KB" '
-    $1 == "A" && $2 + 0 >= min {
+    $1 == "A" && $2 + 0 >= min && $5 !~ /shared/ {
       if (!($3 in paths)) { order[++n] = $3 }
       p = $6
       if (index(p, home "/") == 1) p = "\\$HOME" substr(p, length(home) + 1)
@@ -437,20 +441,35 @@ emit_rules() {
     return 0
   fi
 
+  # 已写入过的 id 不重复追加（Tier 1 已声明 ORPHAN_ID_RULES=()，此处只用 +=）
+  local line id
+  : > "$TMP/emit-new.txt"
+  while IFS= read -r line; do
+    id="${line#  \"}"
+    id="${id%%|*}"
+    if [ -f "$USER_DATA_FILE" ] && grep -qF "\"$id|" "$USER_DATA_FILE" 2>/dev/null; then
+      continue
+    fi
+    printf '%s\n' "$line" >> "$TMP/emit-new.txt"
+  done < "$stage"
+
+  if [ ! -s "$TMP/emit-new.txt" ]; then
+    echo ""
+    echo -e "  ${DIM}这些 id 已存在于 data.txt，无需重复写入。${NC}"
+    return 0
+  fi
+
   {
     echo ""
     echo "# ── 孤儿 bundle id（app-orphans.sh --emit-rules $(date +%Y-%m-%d)）──"
     echo "# 引擎执行前会再次确认该 id 无存活 bundle；删除走废纸篓。"
-    if ! grep -q '^ORPHAN_ID_RULES=' "$USER_DATA_FILE" 2>/dev/null; then
-      echo "ORPHAN_ID_RULES=()"
-    fi
     echo "ORPHAN_ID_RULES+=("
-    cat "$stage"
+    cat "$TMP/emit-new.txt"
     echo ")"
   } >> "$USER_DATA_FILE"
 
   local cnt
-  cnt=$(grep -c '^  "' "$stage" || true)
+  cnt=$(wc -l < "$TMP/emit-new.txt" | tr -d ' ')
   echo ""
   echo -e "  ${GREEN}已写入 $cnt 条规则${NC} → $(short_path "$USER_DATA_FILE")"
   echo -e "  ${DIM}下一步: ./mac-cleanup.sh -n 预览（删除走废纸篓）${NC}"

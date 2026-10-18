@@ -1,0 +1,30 @@
+bundle id:                  1 (0x1)
+container:                  / (0x4)
+path:                       /Applications/Live.app (0x10)
+name:                       Live
+teamID:                     TEAMAAAAAA
+identifier:                 com.live.app
+version:                    1.0
+
+bundle id:                  2 (0x2)
+Bundle node not found on disk: Error Domain=NSOSStatusErrorDomain Code=-43 "fnfErr: File not found"
+container:                  / (0x4)
+path:                       /Applications/Gone.app (0x11)
+name:                       Gone
+teamID:                     TEAMAAAAAA
+identifier:                 com.gone.app
+version:                    1.0
+
+bundle id:                  3 (0x3)
+Bundle node not found on disk: Error Domain=NSOSStatusErrorDomain Code=-43 "fnfErr: File not found"
+path:                       /Applications/Recent.app (0x12)
+name:                       Recent
+identifier:                 com.recent.app
+version:                    1.0
+
+bundle id:                  4 (0x4)
+path:                       /Applications/Live.app/Contents/Frameworks/Helper.app (0x13)
+name:                       Live Helper
+teamID:                     TEAMAAAAAA
+identifier:                 com.live.app.helper
+version:                    1.0

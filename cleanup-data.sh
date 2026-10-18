@@ -13,7 +13,7 @@
 #    去重列表用 "|" 分隔关键词
 # ============================================================================
 
-DATA_VERSION="1.3.1"
+DATA_VERSION="1.4.0"
 
 # ── 去重列表 ─────────────────────────────────────────────────────────────────
 # 自动发现模块跳过已覆盖的路径，避免重复报告
@@ -105,6 +105,14 @@ ORPHAN_RULES=(
 )
 # 已移除: ~/.codebuddy、~/.codebuddycn —— 二者是 CodeBuddy 的配置（settings.json /
 # skills / code-ratio），不是缓存；且 WorkBuddy 沿用了同目录，删除即丢失配置。
+
+# ── 孤儿数据（bundle id 级）──────────────────────────────────────────────
+# 由 app-orphans.sh --emit-rules 审计后追加，勿手写。
+# 格式: "bundle.id|显示名|路径1,路径2"
+# 区别于 ORPHAN_RULES: 判据是「该 bundle id 是否还有存活 bundle」
+# （LaunchServices + 在装清单），不是「/Applications 里有没有同名 .app」。
+# 引擎执行前会再核验一次；删除走 safe_remove（废纸篓）。
+ORPHAN_ID_RULES=()
 
 # ── 代码签名缓存规则（/private/var/folders 下的 *.code_sign_clone）────────
 # 格式: "bundle前缀|App显示名|安装检查路径"

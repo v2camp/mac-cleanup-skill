@@ -1,7 +1,7 @@
 ---
 name: mac-cleanup
-description: Analyze macOS directories for safe disk cleanup, execute data-driven cleanup with 17 modules, auto-discover uncovered caches, and generate maintainable bash cleanup scripts. Use when the user asks to clean up Mac disk space, analyze cache/log directories, manage cleanup rules, scan for stale project artifacts, generate maintenance scripts, or iterate on cleanup rules. Dual-loop dual-tier architecture — agent writes only ~/.mac-cleanup/data.txt, never skill code.
-version: 1.3.0
+description: Analyze macOS directories for safe disk cleanup, execute data-driven cleanup with 18 modules, auto-discover uncovered caches, audit orphaned app leftovers by bundle identity, and generate maintainable bash cleanup scripts. Use when the user asks to clean up Mac disk space, analyze cache/log directories, manage cleanup rules, scan for stale project artifacts, clean leftovers of uninstalled apps, generate maintenance scripts, or iterate on cleanup rules. Dual-loop dual-tier architecture — agent writes only ~/.mac-cleanup/data.txt, never skill code.
+version: 1.4.0
 ---
 
 # Mac Cleanup Skill
@@ -51,18 +51,31 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 │  ● 只读：不删文件、不写 data.txt、不进 -y                     │
 │  ● 补通道 A 的结构性盲区（System/AssetsV2、Library/Developer、│
 │    private/var/folders、/opt，以及「大文件而非缓存目录」）     │
+│                                                              │
+│  通道 C — app-orphans.sh          (identity-first)           │
+│  ● 声明减法：候选 − 存活 bundle 声明 = 孤儿                   │
+│  ● 只读；--emit-rules 才写 data.txt 的 ORPHAN_ID_RULES        │
+│  ● 补「App 删了但数据还在」：Caches/Containers/Group          │
+│    Containers/Preferences/Saved State/LaunchAgents           │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 两个发现通道的分工
+### 三个发现通道的分工
 
-| | 通道 A `scan-discover.sh` | 通道 B `disk-8020.sh` |
-|---|---|---|
-| 判据 | 目录名模式（Cache/Caches/tmp/logs） | 占用大小排序 |
-| 范围 | `~/Library/Containers`、`~/Library/Application Support`（均 maxdepth 4）、`~/.cache/*` | 整个卷（默认数据卷） |
-| 强项 | 新装 App 产生的缓存目录 | 路径想不到的占用、单个大文件 |
-| 弱项 | 三条路径族之外一律看不见；文件级不可见 | 只知大小，不知能否删 |
-| 输出 | 可直接 `--apply` 成规则 | **仅供判定，不可自动成规则** |
+| | A `scan-discover.sh` | B `disk-8020.sh` | C `app-orphans.sh` |
+|---|---|---|---|
+| 判据 | 目录名模式（Cache/tmp/logs） | 占用大小排序 | bundle id 是否还有存活 bundle |
+| 范围 | Containers / App Support / dotfiles | 整个卷 | 8 类 Library 根 |
+| 强项 | 新装 App 的缓存 | 路径想不到的占用 | 已卸载 App 的整片残留 |
+| 弱项 | 三条路径族之外看不见 | 只知大小，不知能否删 | 只认 bundle id 形态的目录 |
+| 输出 | 可直接 `--apply` 成规则 | 仅供判定 | TSV 报告 + `--emit-rules` 写 A 级 |
+
+**通道 C 的证据分级（判定标准，不是体积）：**
+- **A**：LaunchServices 有该 bundle 的失效记录（`Bundle node not found on disk`），且无存活同名 bundle → 可进 `safe_remove` 候选
+- **B**：仅目录残留，无卸载证据 → 只报告，人工确认
+- **C**：`com.apple.*`、与现存 bundle 构成父子关系、组件后缀（helper/agent/xpc…）、同 TeamID 共享容器、静默期内被改写 → 不建议处理
+
+**铁律：声明集不完整时必须输出零结果。** 没有完全磁盘访问、`lsregister` 失败、扫描超时时，宁可报告"零孤儿"，不可给一份猜出来的清单。
 
 **铁律：尺寸 ≠ 可删。** Docker.raw 19 GB 是运行时必需，Trae 的 `database.db` 2.5 GB 是用户数据。
 通道 B 的结果只能进入「待判定清单」，安全性判定仍必须走数据层。
@@ -72,6 +85,7 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 | 变更类型 | 改哪里 | 谁改 |
 |---------|--------|------|
 | 发现新缓存目录 | `~/.mac-cleanup/data.txt` | agent 自动 / 用户手动 |
+| 发现孤儿残留 | `~/.mac-cleanup/data.txt` 的 `ORPHAN_ID_RULES` | `app-orphans.sh --emit-rules` |
 | 新增已知 App 规则 | `cleanup-data.sh` (Tier 1) | 开发者 |
 | 新增模块类型 | `mac-cleanup.sh` | 开发者 |
 | 调整工作流 | `SKILL.md` | 开发者 |
@@ -158,6 +172,25 @@ disk-8020 报告 → 逐项判定 SAFE / CAUTION / RISKY → SAFE 项写入 data
 
 **参数：** `THRESHOLD`(0.8) `MIN_MB`(100) `MAX_DEPTH`(6) `MAX_KIDS`(8) `MIN_PCT`(1)，按环境变量传入。
 回退方式：`./tests/disk-8020.test.sh`（12 项断言，覆盖递归状态污染与根层截断两类历史缺陷）。
+
+### 2c. 孤儿残留审计 → 生成 bundle id 规则（通道 C）
+
+```bash
+./app-orphans.sh                 # 只读审计，TSV 报告写入 ~/.mac-cleanup/reports/
+./app-orphans.sh --min-conf A    # 只看有卸载证据的
+./app-orphans.sh --emit-rules    # A 级写入 ~/.mac-cleanup/data.txt
+./mac-cleanup.sh -n              # 预览；确认后 -y 才真正移入废纸篓
+```
+
+**读法：** A 级＝有卸载证据（该 bundle id 的 LaunchServices 记录已失效）；B 级＝仅目录残留；
+C 级＝不建议处理（系统身份／与现存 bundle 相关／helper 组件／同 TeamID 共享容器／静默期内被改写）。
+
+**约束：**
+- 只按 bundle id 归因，不按显示名。`Application Support/Google` 这类厂商父目录会被名字匹配误伤。
+- Group Containers 只有在 stripped id 有失效证据时才进 A，并标 `shared`，不自动 emit。
+- 静默期：A 级 7 天，B 级 30 天（`--quiet-days` 可调）。近期被写过的候选一律降 C。
+- 迁移/换机后 `com.apple.*` 之外的容器可能被系统复用 —— 报告永远是「候选」，不是「可删」。
+- 回退：`./tests/app-orphans.test.sh`（18 项断言，含「声明集为空必须报零」这条安全不变式）。
 
 ### 3. 从用户数据提升到 Skill 数据
 
@@ -266,7 +299,11 @@ MANUAL_REMINDERS=(
 ./scan-discover.sh --patch    # 查看补丁（不写入）
 ./scan-discover.sh --apply    # 追加到 ~/.mac-cleanup/data.txt
 ./disk-8020.sh --dump <file>  # 复用 dump 重算
+./app-orphans.sh              # 孤儿残留审计（只读）
+./app-orphans.sh --emit-rules # A 级写入 data.txt
+./app-orphans.sh --verify ID  # 判定这些 bundle id 是否仍有主
 ./tests/disk-8020.test.sh     # 回归测试
+./tests/app-orphans.test.sh   # 回归测试
 ```
 
 ## 工具函数

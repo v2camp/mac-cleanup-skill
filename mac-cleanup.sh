@@ -904,6 +904,84 @@ cleanup_app_caches() {
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# 18. 已卸载 App 的孤儿数据（bundle id 级）
+#     数据源: ORPHAN_ID_RULES（Tier 1 / Tier 2，由 app-orphans.sh --emit-rules 写入）
+#     格式: "bundle.id|显示名|路径1,路径2"
+#     与 ORPHAN_RULES 的差别: 判据不是「/Applications 里有没有同名 .app」，
+#       而是「这个 bundle id 还有没有存活 bundle」（LaunchServices + 在装清单）。
+#       执行前再核验一次，防止审计后重装 App 被误删。
+#     动作: safe_remove（移入废纸篓），不做物理删除
+# ────────────────────────────────────────────────────────────────────────────
+cleanup_orphan_ids() {
+  section "已卸载 App 的孤儿数据（bundle id 级）"
+
+  if [ ${#ORPHAN_ID_RULES[@]:-0} -eq 0 ] 2>/dev/null; then
+    echo -e "  ${CYAN}[跳过]${NC} 无规则（可运行 app-orphans.sh --emit-rules 生成）"
+    return
+  fi
+
+  local checker="$SCRIPT_DIR/app-orphans.sh"
+  if [ ! -x "$checker" ]; then
+    echo -e "  ${YELLOW}[跳过]${NC} 缺少 app-orphans.sh，无法核验 bundle id"
+    return
+  fi
+
+  # 一次性核验所有 id（一次 lsregister 解析），避免逐条 fork
+  local ids=() rule id name paths
+  for rule in "${ORPHAN_ID_RULES[@]}"; do
+    IFS='|' read -r id _ _ <<< "$rule"
+    [ -n "$id" ] && ids+=("$id")
+  done
+
+  local vfile
+  vfile=$(mktemp "${TMPDIR:-/tmp}/orphan-verify.XXXXXX")
+  "$checker" --verify "${ids[@]}" > "$vfile" 2>/dev/null || true
+
+  for rule in "${ORPHAN_ID_RULES[@]}"; do
+    IFS='|' read -r id name paths <<< "$rule"
+    if [ -z "$id" ] || [ -z "$paths" ]; then
+      continue
+    fi
+
+    # 审计之后 App 可能被重新安装 —— 执行前必须再确认一次
+    if grep -qx "$(printf '%s\tlive' "$id")" "$vfile" 2>/dev/null; then
+      echo -e "  ${CYAN}[跳过]${NC} $name — bundle id 仍存活 ($id)"
+      continue
+    fi
+
+    local old_ifs parts
+    old_ifs="$IFS"
+    IFS=','
+    read -r -a parts <<< "$paths"
+    IFS="$old_ifs"
+
+    local total=0 p sz
+    for p in "${parts[@]}"; do
+      eval "p=\"$p\""
+      [ -e "$p" ] || continue
+      sz=$(size_of "$p")
+      total=$((total + sz))
+    done
+
+    [ "$total" -gt 0 ] || continue
+
+    echo -e "  $name 残留数据 (App 已卸载): $(human_size $total)  ${DIM}$id${NC}"
+    if confirm "删除 $name 的残留数据? (移入废纸篓)"; then
+      local before=$total
+      for p in "${parts[@]}"; do
+        eval "p=\"$p\""
+        safe_remove "$p"
+      done
+      calc_freed "$before" 0
+    fi
+  done
+
+  rm -f "$vfile"
+  report_section
+}
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # 13. Glob 模式清理（QQ 表情 zip、同花顺日志等）
 #     数据源: GLOB_CACHE_RULES (cleanup-data.sh)
 #     格式: "目录路径|glob模式|显示名|阈值KB|提示语"
@@ -1424,6 +1502,7 @@ cleanup_npm                 # npm 缓存 + npx 缓存 + 日志
 cleanup_pnpm                # pnpm store 修剪
 cleanup_system_caches       # ~/Library/Caches 浏览器/工具缓存
 cleanup_app_caches           # Telegram/腾讯会议/QQ/同花顺/腾讯文档/Obsidian 等
+cleanup_orphan_ids           # 已卸载 App 的孤儿数据（bundle id 级，需先审计）
 cleanup_glob_caches          # Glob 模式清理 (QQ zip/同花顺日志)
 cleanup_multi_user_caches    # 多用户目录遍历 (腾讯文档)
 cleanup_logs                # 应用日志

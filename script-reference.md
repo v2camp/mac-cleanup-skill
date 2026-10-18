@@ -9,20 +9,25 @@
 | `mac-cleanup.sh` | 引擎 | source 两级数据 + 执行清理；`--analyze` 直通 disk-8020 | 开发者 |
 | `scan-discover.sh` | 发现通道 A | pattern-first：扫描盲区、--apply 写 Tier 2 | 开发者 |
 | `disk-8020.sh` | 发现通道 B | size-first：全卷 80/20 下钻，**严格只读** | 开发者 |
+| `app-orphans.sh` | 发现通道 C | identity-first：声明减法找孤儿残留，只读；`--emit-rules` 写 Tier 2 | 开发者 |
 | `tests/disk-8020.test.sh` | 测试 | 通道 B 回归断言（递归状态污染 / 根层截断） | 开发者 |
+| `tests/app-orphans.test.sh` | 测试 | 通道 C 回归断言（分级 + 声明集为空必须报零） | 开发者 |
 | `SKILL.md` | 文档 | agent 工作流指南 | 开发者 |
 
-### 发现层双通道
+### 发现层三通道
 
-| | 通道 A `scan-discover.sh` | 通道 B `disk-8020.sh` |
-|---|---|---|
-| 判据 | 目录名模式 | 占用大小 |
-| 范围 | 3 条固定路径族 | 整个卷 |
-| 可写数据层 | 是（`--apply`） | **否，永不** |
-| 成本 | 1~2 秒 | ~42 秒（33 MB dump） |
+| | 通道 A `scan-discover.sh` | 通道 B `disk-8020.sh` | 通道 C `app-orphans.sh` |
+|---|---|---|---|
+| 判据 | 目录名模式 | 占用大小 | bundle id 是否还有存活 bundle |
+| 范围 | 3 条固定路径族 | 整个卷 | 8 类 Library 根 |
+| 可写数据层 | 是（`--apply`） | **否，永不** | 仅 A 级（`--emit-rules`） |
+| 成本 | 1~2 秒 | ~42 秒（33 MB dump） | ~7 秒（23 MB dump） |
 
 `disk-8020.sh` 与引擎的契约边界：不 source `cache_remove` / `safe_remove`，不参与 `-y`，
 不修改 `data.txt`。它回答「该看哪里」，引擎回答「能不能删」。
+
+`app-orphans.sh` 同理只读；它回答「这些残留是谁留下的、还有没有主」，
+真正删除由 `cleanup_orphan_ids` 执行，且走废纸篓。
 
 ### 两级数据层
 
@@ -92,6 +97,21 @@ ORPHAN_RULES=(
 ```
 
 当 `/Applications` 中无匹配 `*关键字*` 的 App 时，标记为孤儿。
+
+> 该判据是弱判据：名字子串会误伤同厂商兄弟产品，也会漏掉 bundle id 命名的目录。
+> 新场景优先用下面的 `ORPHAN_ID_RULES`，`ORPHAN_RULES` 只保留给已知 App 的显式规则。
+
+#### 孤儿 bundle id 规则 (v1.4)
+
+```bash
+ORPHAN_ID_RULES=(
+  "bundle.id|显示名|\$HOME/Library/Containers/bundle.id,\$HOME/Library/Group Containers/TEAM.bundle.id"
+)
+```
+
+由 `app-orphans.sh --emit-rules` 生成，**勿手写**。引擎执行前会用
+`app-orphans.sh --verify` 再确认该 id 无存活 bundle，然后 `safe_remove` 每个路径。
+判据是「bundle id 是否还有主」，与显示名无关。
 
 #### 代码签名缓存规则 (v1.3.0)
 
@@ -173,6 +193,7 @@ STALE_ARTIFACT_DEFS=(
 | 15 | 模拟器 dyld | `cleanup_simulator_caches` | 无 | 需要 sudo |
 | 16 | 自动发现 | `cleanup_auto_discover` | DEDUP_*, DISCOVER_* | 单次 find 扫描 |
 | 17 | 废纸篓 | `cleanup_trash` | 无 (CLI) | Finder AppleScript |
+| 18 | 孤儿数据 | `cleanup_orphan_ids` | ORPHAN_ID_RULES | `app-orphans.sh --verify` 复核 + safe_remove |
 
 ### 性能优化
 
@@ -240,6 +261,7 @@ cd ~/.workbuddy/skills/mac-cleanup && pwd -P     # 应解析到开发目录
 
 - [ ] `bash -n` 语法检查（`set -euo pipefail` 下尤其注意 `$1` 空值）
 - [ ] `./tests/disk-8020.test.sh` 全绿
+- [ ] `./tests/app-orphans.test.sh` 全绿
 - [ ] 用 PATH 探针确认 dry-run 未调用真实 CLI（`pnpm` / `brew` / `xcrun`）
 - [ ] 确认 `~/.workbuddy/skills/mac-cleanup` 软链未断（`readlink` + `pwd -P`）
 - [ ] `./mac-cleanup.sh -n` 从软链路径跑一遍（软链断链时平台静默忽略，不会报错）
