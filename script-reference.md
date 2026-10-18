@@ -189,24 +189,28 @@ STALE_ARTIFACT_DEFS=(
 
 ### 同步机制
 
-**实测（2026-10-18）：本机 `~/.workbuddy/skills/mac-cleanup` 是实目录副本，不是符号链接。**
-两者 inode 不同，`SKILL.md` 曾出现「代码已改但已安装副本仍是旧版」的静默不一致。
-改动开发目录后必须显式同步，否则用户侧运行的仍是旧代码：
+**现状（2026-10-18 17:19 起）：`~/.workbuddy/skills/mac-cleanup` 是指向开发目录的符号链接。**
 
 ```bash
-SRC=~/Code/mac-cleanup-skill
-DST=~/.workbuddy/skills/mac-cleanup
-cp "$SRC"/{mac-cleanup.sh,disk-8020.sh,scan-discover.sh,cleanup-data.sh,SKILL.md,script-reference.md} "$DST"/
-cp -R "$SRC/tests" "$DST"/
+~/.workbuddy/skills/mac-cleanup -> ~/Code/mac-cleanup-skill
 ```
 
-**校验（必做，否则不知道同步是否生效）：**
+改仓库即生效，无需 cp。历史背景：此前它是**实目录副本**（inode 不同），曾导致
+「引擎 dry-run 删除 bug 已在仓库修复、用户侧仍跑旧版」的静默不一致；已改为软链根治。
+
+**仍需校验**（软链也可能断，且平台对断链是静默忽略的）：
 
 ```bash
-for f in mac-cleanup.sh disk-8020.sh SKILL.md; do
-  diff -q "$SRC/$f" "$DST/$f" >/dev/null && echo "$f 一致" || echo "$f 不一致"
-done
+test -L ~/.workbuddy/skills/mac-cleanup && echo "软链存在" || echo "不是软链"
+readlink ~/.workbuddy/skills/mac-cleanup
+cd ~/.workbuddy/skills/mac-cleanup && pwd -P     # 应解析到开发目录
 ```
+
+改软链前的原副本备份在 `~/.workbuddy/skills/.backup-mac-cleanup-20261018-1719`
+（含 `_user_meta.json`；符号链接型技能不需要该文件，现有链接型技能均无）。
+
+**注意：** `pwd -P` 会把软链解析成物理路径，因此 `mac-cleanup.sh` 的 `SCRIPT_DIR`
+永远指向开发目录，`--analyze` 调用 `disk-8020.sh` 不受影响。
 
 ### 迭代检查清单
 
@@ -237,5 +241,5 @@ done
 - [ ] `bash -n` 语法检查（`set -euo pipefail` 下尤其注意 `$1` 空值）
 - [ ] `./tests/disk-8020.test.sh` 全绿
 - [ ] 用 PATH 探针确认 dry-run 未调用真实 CLI（`pnpm` / `brew` / `xcrun`）
-- [ ] 同步到 `~/.workbuddy/skills/mac-cleanup` 并 `diff -q` 校验
-- [ ] `./mac-cleanup.sh -n` 在已安装副本上跑一遍（改的是仓库不等于生效）
+- [ ] 确认 `~/.workbuddy/skills/mac-cleanup` 软链未断（`readlink` + `pwd -P`）
+- [ ] `./mac-cleanup.sh -n` 从软链路径跑一遍（软链断链时平台静默忽略，不会报错）

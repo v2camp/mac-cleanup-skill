@@ -5,11 +5,14 @@
   2026-10-18 之前本目录**不是 git 仓库**，skill 由 `userImport` 上传安装、无上游可参照。
 - 本机 `gh` 需加 `env -u GITHUB_TOKEN -u GH_TOKEN` 才能用（该环境变量是失效 token，会遮蔽 keyring 凭据）。
 
-## 部署与同步（最容易踩的坑）- 开发目录 `/Users/wanghui/Code/mac-cleanup-skill` 与已安装目录 `~/.workbuddy/skills/mac-cleanup`
-  是**两份独立副本**（2026-10-18 实测 inode 不同，非符号链接）。`script-reference.md` 旧文写的
-  `~/.agents/skills/mac-cleanup -> ~/Code/mac-cleanup-skill` 符号链接在本机不成立。
-- 后果：改仓库 ≠ 生效。曾出现「引擎 dry-run 删除 bug 已在仓库修复、用户侧仍跑旧版」的静默不一致。
-- 每次改动后必须 `cp` + `diff -q` 校验，详见 `script-reference.md §同步机制`。
+## 部署与同步
+- `~/.workbuddy/skills/mac-cleanup` 自 2026-10-18 17:19 起是**指向本仓库的符号链接**，改仓库即生效。
+- 历史教训：此前它是**实目录副本**（inode 不同），导致「引擎 dry-run 删除 bug 已在仓库修复、
+  用户侧仍跑旧版」的静默不一致。文档旧写的 `~/.agents/skills/mac-cleanup` 软链在本机从未存在过。
+- 软链也会断，且平台对断链**静默忽略**（技能直接消失、无报错）。改完仍要
+  `readlink` + `cd` 进去 `pwd -P` 确认解析到开发目录。
+- 原实目录副本备份在 `~/.workbuddy/skills/.backup-mac-cleanup-20261018-1719`（含 `_user_meta.json`；
+  符号链接型技能不需要该文件）。确认稳定后可删。
 
 ## 架构约定
 - 三层职责不可混：数据轮（cleanup-data.sh = Tier1，~/.mac-cleanup/data.txt = Tier2）、
