@@ -26,12 +26,12 @@
 #    所有候选降为 C 并明确告警——宁可报零，不可报猜。
 #
 #  用法
-#    ./app-orphans.sh                  # 审计并打印报告（只读）
-#    ./app-orphans.sh --top 40         # 明细多显示一些
-#    ./app-orphans.sh --min-conf A      # 只看有卸载证据的
-#    ./app-orphans.sh --emit-rules     # 把 A 级写成 ORPHAN_ID_RULES 追加到
-#                                      #   ~/.mac-cleanup/data.txt（引擎执行仍需 dry-run）
-#    ./app-orphans.sh --verify ID...   # 给引擎用：判定若干 id 是否仍存活
+#    ./scripts/app-orphans.sh                  # 审计并打印报告（只读）
+#    ./scripts/app-orphans.sh --top 40         # 明细多显示一些
+#    ./scripts/app-orphans.sh --min-conf A      # 只看有卸载证据的
+#    ./scripts/app-orphans.sh --emit-rules     # 把 A 级写成 ORPHAN_ID_RULES 追加到
+#                                              #   ~/.mac-cleanup/data.txt（引擎执行仍需 dry-run）
+#    ./scripts/app-orphans.sh --verify ID...   # 给引擎用：判定若干 id 是否仍存活
 #
 #  环境变量（测试用）
 #    ORPHAN_LIBRARY_OVERRIDE  替换 ~/Library 根，指向 fixture
@@ -514,7 +514,7 @@ measure
 case "$MODE" in
   emit)   report; write_tsv; emit_rules ;;
   *)      report; write_tsv
-          echo -e "  ${DIM}确认无误后可: ./app-orphans.sh --emit-rules${NC}" ;;
+          echo -e "  ${DIM}确认无误后可: ./scripts/app-orphans.sh --emit-rules${NC}" ;;
 esac
 
 echo ""

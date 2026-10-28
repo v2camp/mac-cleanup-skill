@@ -12,9 +12,9 @@
 #        不参与清理流程，不接受 -y。输出是「该看哪里」，不是「能不能删」。
 #
 #  用法:
-#    ./disk-8020.sh                       # 扫默认数据卷并分析
-#    ./disk-8020.sh ~/Library             # 指定目录
-#    ./disk-8020.sh --dump /tmp/x.tsv     # 复用已有 du 输出，跳过扫描
+#    ./scripts/disk-8020.sh                       # 扫默认数据卷并分析
+#    ./scripts/disk-8020.sh ~/Library             # 指定目录
+#    ./scripts/disk-8020.sh --dump /tmp/x.tsv     # 复用已有 du 输出，跳过扫描
 #
 #  环境变量: THRESHOLD(0.8) MIN_MB(100) MAX_DEPTH(6) MAX_KIDS(8) MIN_PCT(1)
 # ============================================================================
@@ -33,7 +33,7 @@ MIN_PCT="${MIN_PCT:-1}"
 
 usage() {
   cat <<'EOF'
-用法: disk-8020.sh [选项] [路径]
+用法: scripts/disk-8020.sh [选项] [路径]
 
   路径          要分析的目录，默认 /System/Volumes/Data
   --dump FILE   复用已有 du 输出，跳过扫描（重算约 9 秒）
@@ -47,9 +47,9 @@ usage() {
   MIN_PCT       降噪下限（占整盘百分比），默认 1
 
 示例:
-  ./disk-8020.sh ~/Library
-  MAX_DEPTH=8 MIN_PCT=0.5 ./disk-8020.sh
-  ./disk-8020.sh --dump ~/.mac-cleanup/cache/duscan.tsv
+  ./scripts/disk-8020.sh ~/Library
+  MAX_DEPTH=8 MIN_PCT=0.5 ./scripts/disk-8020.sh
+  ./scripts/disk-8020.sh --dump ~/.mac-cleanup/cache/duscan.tsv
 
 只读工具：不删除文件，不写 ~/.mac-cleanup/data.txt，不参与清理流程。
 EOF

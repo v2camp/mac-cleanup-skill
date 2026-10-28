@@ -11,7 +11,7 @@ set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ROOT_DIR="$(cd "$HERE/.." && pwd)"
-SCRIPT="$ROOT_DIR/disk-8020.sh"
+SCRIPT="$ROOT_DIR/scripts/disk-8020.sh"
 FIXTURE="$HERE/fixtures/tree.tsv"
 
 PASS=0

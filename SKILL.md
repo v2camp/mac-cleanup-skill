@@ -15,7 +15,7 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 │                      数据轮 (Data Loop)                       │
 │                                                              │
 │  ┌─ Tier 1: Skill 数据 ─────────────────────────────────┐   │
-│  │  cleanup-data.sh  (skill 目录内)                       │   │
+│  │  scripts/cleanup-data.sh  (skill 目录内)               │   │
 │  │  ● 经过验证的稳定规则                                   │   │
 │  │  ● 由开发者维护、版本控制                                │   │
 │  │  ● 用户不可修改                                        │   │
@@ -41,18 +41,18 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 ├──────────────────────────────────────────────────────────────┤
 │                      发现层 (Discovery)                       │
 │                                                              │
-│  通道 A — scan-discover.sh        (pattern-first)            │
+│  通道 A — scripts/scan-discover.sh   (pattern-first)         │
 │  ● 扫描 Containers / AppSupport / dotfiles 盲区              │
 │  ● --apply 追加到 ~/.mac-cleanup/data.txt                    │
 │  ● 绝不修改 skill 目录中的文件                                │
 │                                                              │
-│  通道 B — disk-8020.sh            (size-first)               │
+│  通道 B — scripts/disk-8020.sh       (size-first)            │
 │  ● 全卷按占用排序，自顶向下收敛到 80% 分支                    │
 │  ● 只读：不删文件、不写 data.txt、不进 -y                     │
 │  ● 补通道 A 的结构性盲区（System/AssetsV2、Library/Developer、│
 │    private/var/folders、/opt，以及「大文件而非缓存目录」）     │
 │                                                              │
-│  通道 C — app-orphans.sh          (identity-first)           │
+│  通道 C — scripts/app-orphans.sh     (identity-first)        │
 │  ● 声明减法：候选 − 存活 bundle 声明 = 孤儿                   │
 │  ● 只读；--emit-rules 才写 data.txt 的 ORPHAN_ID_RULES        │
 │  ● 补「App 删了但数据还在」：Caches/Containers/Group          │
@@ -62,7 +62,7 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 
 ### 三个发现通道的分工
 
-| | A `scan-discover.sh` | B `disk-8020.sh` | C `app-orphans.sh` |
+| | A `scripts/scan-discover.sh` | B `scripts/disk-8020.sh` | C `scripts/app-orphans.sh` |
 |---|---|---|---|
 | 判据 | 目录名模式（Cache/tmp/logs） | 占用大小排序 | bundle id 是否还有存活 bundle |
 | 范围 | Containers / App Support / dotfiles | 整个卷 | 8 类 Library 根 |
@@ -85,12 +85,25 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 | 变更类型 | 改哪里 | 谁改 |
 |---------|--------|------|
 | 发现新缓存目录 | `~/.mac-cleanup/data.txt` | agent 自动 / 用户手动 |
-| 发现孤儿残留 | `~/.mac-cleanup/data.txt` 的 `ORPHAN_ID_RULES` | `app-orphans.sh --emit-rules` |
-| 新增已知 App 规则 | `cleanup-data.sh` (Tier 1) | 开发者 |
+| 发现孤儿残留 | `~/.mac-cleanup/data.txt` 的 `ORPHAN_ID_RULES` | `scripts/app-orphans.sh --emit-rules` |
+| 新增已知 App 规则 | `scripts/cleanup-data.sh` (Tier 1) | 开发者 |
 | 新增模块类型 | `mac-cleanup.sh` | 开发者 |
 | 调整工作流 | `SKILL.md` | 开发者 |
 
 **用户场景的铁律：agent 只写 `~/.mac-cleanup/data.txt`，绝不修改 skill 目录中的任何文件。**
+
+## 目录结构
+
+```
+mac-cleanup.sh        # 唯一入口（引擎 + --analyze/--discover 直通）
+scripts/
+  cleanup-data.sh     # Tier 1 数据层
+  scan-discover.sh    # 发现通道 A
+  disk-8020.sh        # 发现通道 B
+  app-orphans.sh      # 发现通道 C
+tests/                # 回归测试与 fixture
+docs/                 # 调研记录
+```
 
 ## 触发场景
 
@@ -124,10 +137,10 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 
 ```bash
 # 第一步：预览未覆盖目录
-./scan-discover.sh
+./scripts/scan-discover.sh
 
 # 第二步：追加到用户数据（不动 skill 代码）
-./scan-discover.sh --apply
+./scripts/scan-discover.sh --apply
 
 # 第三步：验证（dry-run）
 ./mac-cleanup.sh -n
@@ -153,7 +166,7 @@ macOS 磁盘清理技能：安全分析、数据驱动清理、自动发现盲�
 ./mac-cleanup.sh --analyze ~/Library
 
 # 复用已有扫描结果秒级重算（换阈值/深度）
-./disk-8020.sh --dump ~/.mac-cleanup/cache/duscan.tsv
+./scripts/disk-8020.sh --dump ~/.mac-cleanup/cache/duscan.tsv
 ```
 
 **读法：** 每层列出子项及占整盘百分比，累计到 80% 的分支会继续下钻，其余折叠为一行；
@@ -176,9 +189,9 @@ disk-8020 报告 → 逐项判定 SAFE / CAUTION / RISKY → SAFE 项写入 data
 ### 2c. 孤儿残留审计 → 生成 bundle id 规则（通道 C）
 
 ```bash
-./app-orphans.sh                 # 只读审计，TSV 报告写入 ~/.mac-cleanup/reports/
-./app-orphans.sh --min-conf A    # 只看有卸载证据的
-./app-orphans.sh --emit-rules    # A 级写入 ~/.mac-cleanup/data.txt
+./scripts/app-orphans.sh                 # 只读审计，TSV 报告写入 ~/.mac-cleanup/reports/
+./scripts/app-orphans.sh --min-conf A    # 只看有卸载证据的
+./scripts/app-orphans.sh --emit-rules    # A 级写入 ~/.mac-cleanup/data.txt
 ./mac-cleanup.sh -n              # 预览；确认后 -y 才真正移入废纸篓
 ```
 
@@ -196,8 +209,8 @@ C 级＝不建议处理（系统身份／与现存 bundle 相关／helper 组件
 
 当某个用户数据条目被多次验证（稳定、通用），开发者可将其"提升"到 Tier 1：
 
-1. 从 `~/.mac-cleanup/data.txt` 复制规则到 `cleanup-data.sh`
-2. 在 `cleanup-data.sh` 的去重列表中添加对应条目
+1. 从 `~/.mac-cleanup/data.txt` 复制规则到 `scripts/cleanup-data.sh`
+2. 在 `scripts/cleanup-data.sh` 的去重列表中添加对应条目
 3. 从用户数据文件中删除（避免重复）
 4. 提交 skill 更新
 
@@ -295,13 +308,13 @@ MANUAL_REMINDERS=(
 ./mac-cleanup.sh -n --discover  # 预览 + 发现
 ./mac-cleanup.sh --analyze    # 80/20 占用分析（只读）
 ./mac-cleanup.sh --analyze ~/Library   # 只分析指定目录
-./scan-discover.sh            # 扫描报告
-./scan-discover.sh --patch    # 查看补丁（不写入）
-./scan-discover.sh --apply    # 追加到 ~/.mac-cleanup/data.txt
-./disk-8020.sh --dump <file>  # 复用 dump 重算
-./app-orphans.sh              # 孤儿残留审计（只读）
-./app-orphans.sh --emit-rules # A 级写入 data.txt
-./app-orphans.sh --verify ID  # 判定这些 bundle id 是否仍有主
+./scripts/scan-discover.sh            # 扫描报告
+./scripts/scan-discover.sh --patch    # 查看补丁（不写入）
+./scripts/scan-discover.sh --apply    # 追加到 ~/.mac-cleanup/data.txt
+./scripts/disk-8020.sh --dump <file>  # 复用 dump 重算
+./scripts/app-orphans.sh              # 孤儿残留审计（只读）
+./scripts/app-orphans.sh --emit-rules # A 级写入 data.txt
+./scripts/app-orphans.sh --verify ID  # 判定这些 bundle id 是否仍有主
 ./tests/disk-8020.test.sh     # 回归测试
 ./tests/app-orphans.test.sh   # 回归测试
 ```

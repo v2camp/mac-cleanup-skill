@@ -218,7 +218,7 @@ C       shared-group     ~/Library/Group Containers/88L...z      —        skip
 
 | 文件 | 角色 |
 |---|---|
-| `app-orphans.sh` | 发现通道 C：声明减法审计，严格只读；`--emit-rules` / `--verify` 两个出口 |
+| `scripts/app-orphans.sh` | 发现通道 C：声明减法审计，严格只读；`--emit-rules` / `--verify` 两个出口 |
 | `mac-cleanup.sh` 模块 18 `cleanup_orphan_ids` | 消费 `ORPHAN_ID_RULES`，执行前二次核验，`safe_remove`（废纸篓） |
 | `tests/app-orphans.test.sh` | 18 项断言，纯 fixture，不读取真实 Library |
 

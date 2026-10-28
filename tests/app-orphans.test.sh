@@ -16,7 +16,7 @@ set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ROOT_DIR="$(cd "$HERE/.." && pwd)"
-SCRIPT="$ROOT_DIR/app-orphans.sh"
+SCRIPT="$ROOT_DIR/scripts/app-orphans.sh"
 LSDUMP="$HERE/fixtures/ls-dump.txt"
 
 FX="$(mktemp -d "${TMPDIR:-/tmp}/orphan-test.XXXXXX")"

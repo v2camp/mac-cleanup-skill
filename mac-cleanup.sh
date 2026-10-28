@@ -20,7 +20,8 @@ set -euo pipefail
 # 加载数据层 — 两级架构
 # Tier 1: skill 数据 (开发者维护，版本控制)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-DATA_FILE="$SCRIPT_DIR/cleanup-data.sh"
+SCRIPTS_DIR="$SCRIPT_DIR/scripts"
+DATA_FILE="$SCRIPTS_DIR/cleanup-data.sh"
 if [ -f "$DATA_FILE" ]; then
   source "$DATA_FILE"
 fi
@@ -58,9 +59,9 @@ if [ "${1:-}" = "--analyze" ] || [ "${1:-}" = "-a" ]; then
     *)     ANALYZE_TARGET="$1" ;;
   esac
   if [ -n "$ANALYZE_TARGET" ]; then
-    exec "$SCRIPT_DIR/disk-8020.sh" "$ANALYZE_TARGET"
+    exec "$SCRIPTS_DIR/disk-8020.sh" "$ANALYZE_TARGET"
   else
-    exec "$SCRIPT_DIR/disk-8020.sh"
+    exec "$SCRIPTS_DIR/disk-8020.sh"
   fi
 fi
 
@@ -916,13 +917,13 @@ cleanup_orphan_ids() {
   section "已卸载 App 的孤儿数据（bundle id 级）"
 
   if [ ${#ORPHAN_ID_RULES[@]:-0} -eq 0 ] 2>/dev/null; then
-    echo -e "  ${CYAN}[跳过]${NC} 无规则（可运行 app-orphans.sh --emit-rules 生成）"
+    echo -e "  ${CYAN}[跳过]${NC} 无规则（可运行 scripts/app-orphans.sh --emit-rules 生成）"
     return
   fi
 
-  local checker="$SCRIPT_DIR/app-orphans.sh"
+  local checker="$SCRIPTS_DIR/app-orphans.sh"
   if [ ! -x "$checker" ]; then
-    echo -e "  ${YELLOW}[跳过]${NC} 缺少 app-orphans.sh，无法核验 bundle id"
+    echo -e "  ${YELLOW}[跳过]${NC} 缺少 scripts/app-orphans.sh，无法核验 bundle id"
     return
   fi
 

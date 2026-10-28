@@ -4,34 +4,34 @@
 
 | 文件 | 层级 | 职责 | 谁改 |
 |------|------|------|------|
-| `cleanup-data.sh` | Tier 1 数据 | 稳定清理规则、去重列表 | 开发者 |
+| `mac-cleanup.sh` | 入口 + 引擎 | source 两级数据 + 执行清理；`--analyze` / `--discover` 直通 | 开发者 |
+| `scripts/cleanup-data.sh` | Tier 1 数据 | 稳定清理规则、去重列表 | 开发者 |
 | `~/.mac-cleanup/data.txt` | Tier 2 数据 | 用户级发现数据、本地追加 | agent / 用户 |
-| `mac-cleanup.sh` | 引擎 | source 两级数据 + 执行清理；`--analyze` 直通 disk-8020 | 开发者 |
-| `scan-discover.sh` | 发现通道 A | pattern-first：扫描盲区、--apply 写 Tier 2 | 开发者 |
-| `disk-8020.sh` | 发现通道 B | size-first：全卷 80/20 下钻，**严格只读** | 开发者 |
-| `app-orphans.sh` | 发现通道 C | identity-first：声明减法找孤儿残留，只读；`--emit-rules` 写 Tier 2 | 开发者 |
+| `scripts/scan-discover.sh` | 发现通道 A | pattern-first：扫描盲区、--apply 写 Tier 2 | 开发者 |
+| `scripts/disk-8020.sh` | 发现通道 B | size-first：全卷 80/20 下钻，**严格只读** | 开发者 |
+| `scripts/app-orphans.sh` | 发现通道 C | identity-first：声明减法找孤儿残留，只读；`--emit-rules` 写 Tier 2 | 开发者 |
 | `tests/disk-8020.test.sh` | 测试 | 通道 B 回归断言（递归状态污染 / 根层截断） | 开发者 |
 | `tests/app-orphans.test.sh` | 测试 | 通道 C 回归断言（分级 + 声明集为空必须报零） | 开发者 |
 | `SKILL.md` | 文档 | agent 工作流指南 | 开发者 |
 
 ### 发现层三通道
 
-| | 通道 A `scan-discover.sh` | 通道 B `disk-8020.sh` | 通道 C `app-orphans.sh` |
+| | 通道 A `scripts/scan-discover.sh` | 通道 B `scripts/disk-8020.sh` | 通道 C `scripts/app-orphans.sh` |
 |---|---|---|---|
 | 判据 | 目录名模式 | 占用大小 | bundle id 是否还有存活 bundle |
 | 范围 | 3 条固定路径族 | 整个卷 | 8 类 Library 根 |
 | 可写数据层 | 是（`--apply`） | **否，永不** | 仅 A 级（`--emit-rules`） |
 | 成本 | 1~2 秒 | ~42 秒（33 MB dump） | ~7 秒（23 MB dump） |
 
-`disk-8020.sh` 与引擎的契约边界：不 source `cache_remove` / `safe_remove`，不参与 `-y`，
+`scripts/disk-8020.sh` 与引擎的契约边界：不 source `cache_remove` / `safe_remove`，不参与 `-y`，
 不修改 `data.txt`。它回答「该看哪里」，引擎回答「能不能删」。
 
-`app-orphans.sh` 同理只读；它回答「这些残留是谁留下的、还有没有主」，
+`scripts/app-orphans.sh` 同理只读；它回答「这些残留是谁留下的、还有没有主」，
 真正删除由 `cleanup_orphan_ids` 执行，且走废纸篓。
 
 ### 两级数据层
 
-**Tier 1** (`cleanup-data.sh`): 定义基础数组，如 `APP_CACHE_RULES=()`、`DEDUP_CONTAINERS="..."`
+**Tier 1** (`scripts/cleanup-data.sh`): 定义基础数组，如 `APP_CACHE_RULES=()`、`DEDUP_CONTAINERS="..."`
 
 **Tier 2** (`~/.mac-cleanup/data.txt`): bash-sourceable 文件，用 `+=` 追加到同一数组：
 ```bash
@@ -109,8 +109,8 @@ ORPHAN_ID_RULES=(
 )
 ```
 
-由 `app-orphans.sh --emit-rules` 生成，**勿手写**。引擎执行前会用
-`app-orphans.sh --verify` 再确认该 id 无存活 bundle，然后 `safe_remove` 每个路径。
+由 `scripts/app-orphans.sh --emit-rules` 生成，**勿手写**。引擎执行前会用
+`scripts/app-orphans.sh --verify` 再确认该 id 无存活 bundle，然后 `safe_remove` 每个路径。
 判据是「bundle id 是否还有主」，与显示名无关。
 
 #### 代码签名缓存规则 (v1.3.0)
@@ -193,7 +193,7 @@ STALE_ARTIFACT_DEFS=(
 | 15 | 模拟器 dyld | `cleanup_simulator_caches` | 无 | 需要 sudo |
 | 16 | 自动发现 | `cleanup_auto_discover` | DEDUP_*, DISCOVER_* | 单次 find 扫描 |
 | 17 | 废纸篓 | `cleanup_trash` | 无 (CLI) | Finder AppleScript |
-| 18 | 孤儿数据 | `cleanup_orphan_ids` | ORPHAN_ID_RULES | `app-orphans.sh --verify` 复核 + safe_remove |
+| 18 | 孤儿数据 | `cleanup_orphan_ids` | ORPHAN_ID_RULES | `scripts/app-orphans.sh --verify` 复核 + safe_remove |
 
 ### 性能优化
 
@@ -231,7 +231,7 @@ cd ~/.workbuddy/skills/mac-cleanup && pwd -P     # 应解析到开发目录
 （含 `_user_meta.json`；符号链接型技能不需要该文件，现有链接型技能均无）。
 
 **注意：** `pwd -P` 会把软链解析成物理路径，因此 `mac-cleanup.sh` 的 `SCRIPT_DIR`
-永远指向开发目录，`--analyze` 调用 `disk-8020.sh` 不受影响。
+永远指向开发目录，`--analyze` 调用 `scripts/disk-8020.sh` 不受影响。
 
 ### 迭代检查清单
 
@@ -240,20 +240,20 @@ cd ~/.workbuddy/skills/mac-cleanup && pwd -P     # 应解析到开发目录
 - [ ] 追加到 `~/.mac-cleanup/data.txt`
 - [ ] 同步更新去重条目（DEDUP_*）
 - [ ] `./mac-cleanup.sh -n` 预览验证
-- [ ] `./scan-discover.sh` 确认不再重复报告
+- [ ] `./scripts/scan-discover.sh` 确认不再重复报告
 
 新增稳定规则后（Tier 1 提升到 skill 数据）：
 
-- [ ] 从 `~/.mac-cleanup/data.txt` 复制到 `cleanup-data.sh`
+- [ ] 从 `~/.mac-cleanup/data.txt` 复制到 `scripts/cleanup-data.sh`
 - [ ] 在用户数据中删除对应条目（避免重复）
-- [ ] `bash -n mac-cleanup.sh` 语法检查
+- [ ] `bash -n mac-cleanup.sh scripts/*.sh` 语法检查
 - [ ] 提交 skill 更新
 
 新增模块类型后：
 
 - [ ] 在 `mac-cleanup.sh` 中添加函数
 - [ ] 在 MAIN 中注册调用
-- [ ] 更新 `cleanup-data.sh` 去重列表
+- [ ] 更新 `scripts/cleanup-data.sh` 去重列表
 - [ ] 更新本文件的模块清单表格
 - [ ] 语法检查 + dry-run 验证
 

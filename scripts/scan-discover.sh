@@ -11,9 +11,9 @@
 #    不修改 skill 目录中的任何文件
 #
 #  用法:
-#    ./scan-discover.sh           # 人类可读报告
-#    ./scan-discover.sh --patch   # 输出可追加的 bash 片段（不写入）
-#    ./scan-discover.sh --apply   # 扫描并追加到 ~/.mac-cleanup/data.txt
+#    ./scripts/scan-discover.sh           # 人类可读报告
+#    ./scripts/scan-discover.sh --patch   # 输出可追加的 bash 片段（不写入）
+#    ./scripts/scan-discover.sh --apply   # 扫描并追加到 ~/.mac-cleanup/data.txt
 # ============================================================================
 
 set -euo pipefail
@@ -37,7 +37,8 @@ if [ -f "$USER_DATA_FILE" ]; then
   source "$USER_DATA_FILE"
 fi
 
-MODE="${1:-report}"  # report | patch | apply
+MODE="${1:-report}"
+MODE="${MODE#--}"        # 接受 --patch / --apply 写法
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -245,8 +246,8 @@ if [ "$MODE" = "report" ]; then
   echo ""
   echo -e "${BOLD}未覆盖项: ${entry_count} 个，合计 $(human_size $total_sz)${NC}"
   echo -e "${DIM}提示:${NC}"
-  echo -e "${DIM}  ./scan-discover.sh --patch   查看可追加的 bash 片段${NC}"
-  echo -e "${DIM}  ./scan-discover.sh --apply   追加到 $USER_DATA_FILE${NC}"
+  echo -e "${DIM}  ./scripts/scan-discover.sh --patch   查看可追加的 bash 片段${NC}"
+  echo -e "${DIM}  ./scripts/scan-discover.sh --apply   追加到 $USER_DATA_FILE${NC}"
 fi
 
 if [ "$MODE" = "patch" ]; then
