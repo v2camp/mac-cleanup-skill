@@ -214,7 +214,7 @@ cleanup_code_sign_clone() {
 
     # 从 CODE_SIGN_RULES 数据层匹配 App
     local app_name="" install_path="" matched=false
-    if [ ${#CODE_SIGN_RULES[@]:-0} -gt 0 ] 2>/dev/null; then
+    if [ ${#CODE_SIGN_RULES[@]} -gt 0 ] 2>/dev/null; then
       for rule in "${CODE_SIGN_RULES[@]}"; do
         IFS='|' read -r prefix name check_path <<< "$rule"
         case "$app_id" in
@@ -445,7 +445,7 @@ cleanup_xcode() {
   fi
 
   # 数据驱动的 Xcode 缓存路径
-  if [ ${#XCODE_CACHE_RULES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#XCODE_CACHE_RULES[@]} -gt 0 ] 2>/dev/null; then
     for rule in "${XCODE_CACHE_RULES[@]}"; do
       IFS='|' read -r rel_path display_name threshold prompt_msg <<< "$rule"
       local full_path="$xcode_dev/$rel_path"
@@ -516,7 +516,7 @@ cleanup_editor_caches() {
   local caches="$HOME/Library/Caches"
 
   # ── Application Support 下的 logs + CachedData ──
-  if [ ${#EDITOR_AS_CACHES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#EDITOR_AS_CACHES[@]} -gt 0 ] 2>/dev/null; then
     for entry in "${EDITOR_AS_CACHES[@]}"; do
       IFS='|' read -r dir_name display_name <<< "$entry"
       local base="$app_support/$dir_name"
@@ -541,7 +541,7 @@ cleanup_editor_caches() {
   fi
 
   # ── IDE 在 ~/Library/Caches 中的缓存 ──
-  if [ ${#IDE_LIB_CACHES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#IDE_LIB_CACHES[@]} -gt 0 ] 2>/dev/null; then
     for entry in "${IDE_LIB_CACHES[@]}"; do
       IFS='|' read -r dir_name display_name <<< "$entry"
       local ic_path="$caches/$dir_name"
@@ -563,7 +563,7 @@ cleanup_editor_caches() {
   fi
 
   # ── ShipIt 更新包暂存（已应用的 Electron 更新）──
-  if [ ${#SHIPIT_CACHES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#SHIPIT_CACHES[@]} -gt 0 ] 2>/dev/null; then
     for entry in "${SHIPIT_CACHES[@]}"; do
       IFS='|' read -r dir_name display_name <<< "$entry"
       local si_path="$caches/$dir_name"
@@ -603,7 +603,7 @@ cleanup_system_caches() {
   fi
 
   # ── 数据驱动的缓存目录清理 ──
-  if [ ${#SYSTEM_CACHES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#SYSTEM_CACHES[@]} -gt 0 ] 2>/dev/null; then
     for entry in "${SYSTEM_CACHES[@]}"; do
       IFS='|' read -r dir_name display_name <<< "$entry"
       local bc="$caches/$dir_name"
@@ -745,7 +745,7 @@ cleanup_app_caches() {
 
   # ── 数据驱动的简单 App 缓存规则 ──
   # 格式: "路径|显示名|操作类型|阈值KB"
-  if [ ${#APP_CACHE_RULES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#APP_CACHE_RULES[@]} -gt 0 ] 2>/dev/null; then
     for rule in "${APP_CACHE_RULES[@]}"; do
       IFS='|' read -r path_tmpl display_name action threshold <<< "$rule"
       # 展开 $HOME
@@ -772,7 +772,7 @@ cleanup_app_caches() {
   # ── 孤儿 dotfiles：App 已卸载，数据目录残留 ──
   # 数据源: ORPHAN_RULES (cleanup-data.sh)
   # 格式: "路径|显示名|app:App关键字"
-  if [ ${#ORPHAN_RULES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#ORPHAN_RULES[@]} -gt 0 ] 2>/dev/null; then
     for item in "${ORPHAN_RULES[@]}"; do
       IFS='|' read -r path_tmpl name check <<< "$item"
       # 展开 $HOME
@@ -814,7 +814,7 @@ cleanup_app_caches() {
   # ── 已安装 App 的 dotfile 缓存/日志/快照 ──
   # 数据源: DOTFILE_CACHE_RULES (cleanup-data.sh)
   # 格式: "dotfile 路径|子目录1,子目录2|显示名|阈值KB"
-  if [ ${#DOTFILE_CACHE_RULES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#DOTFILE_CACHE_RULES[@]} -gt 0 ] 2>/dev/null; then
     for rule in "${DOTFILE_CACHE_RULES[@]}"; do
       IFS='|' read -r base_tmpl subdirs_csv display_name threshold <<< "$rule"
       # 展开 $HOME
@@ -916,7 +916,7 @@ cleanup_app_caches() {
 cleanup_orphan_ids() {
   section "已卸载 App 的孤儿数据（bundle id 级）"
 
-  if [ ${#ORPHAN_ID_RULES[@]:-0} -eq 0 ] 2>/dev/null; then
+  if [ ${#ORPHAN_ID_RULES[@]} -eq 0 ] 2>/dev/null; then
     echo -e "  ${CYAN}[跳过]${NC} 无规则（可运行 scripts/app-orphans.sh --emit-rules 生成）"
     return
   fi
@@ -990,7 +990,7 @@ cleanup_orphan_ids() {
 cleanup_glob_caches() {
   section "Glob 模式清理"
 
-  if [ ${#GLOB_CACHE_RULES[@]:-0} -eq 0 ] 2>/dev/null; then
+  if [ ${#GLOB_CACHE_RULES[@]} -eq 0 ] 2>/dev/null; then
     echo -e "  ${CYAN}[跳过]${NC} 无 glob 规则"
     return
   fi
@@ -1030,7 +1030,7 @@ cleanup_glob_caches() {
 cleanup_multi_user_caches() {
   section "多用户目录清理"
 
-  if [ ${#MULTI_USER_RULES[@]:-0} -eq 0 ] 2>/dev/null; then
+  if [ ${#MULTI_USER_RULES[@]} -eq 0 ] 2>/dev/null; then
     echo -e "  ${CYAN}[跳过]${NC} 无多用户规则"
     return
   fi
@@ -1094,7 +1094,7 @@ cleanup_auto_discover() {
 
   # 通用缓存子目录名模式 (用于 find -name) — 数据源: DISCOVER_CACHE_NAMES (cleanup-data.sh)
   local cache_names=()
-  if [ ${#DISCOVER_CACHE_NAMES[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#DISCOVER_CACHE_NAMES[@]} -gt 0 ] 2>/dev/null; then
     cache_names=("${DISCOVER_CACHE_NAMES[@]}")
   fi
 
@@ -1275,7 +1275,7 @@ cleanup_stale_projects() {
 
   # 编译产物类型 — 数据源: STALE_ARTIFACT_DEFS (cleanup-data.sh)
   local artifact_defs=()
-  if [ ${#STALE_ARTIFACT_DEFS[@]:-0} -gt 0 ] 2>/dev/null; then
+  if [ ${#STALE_ARTIFACT_DEFS[@]} -gt 0 ] 2>/dev/null; then
     artifact_defs=("${STALE_ARTIFACT_DEFS[@]}")
   fi
 
